@@ -1,0 +1,61 @@
+name: Deploy Code to AWS
+
+permissions:
+  id-token: write
+
+inputs:
+  project:
+    description: 'Project Name'
+    required: true
+  release_number:
+    description: 'Release Number'
+    required: true
+  channel:
+    description: 'Channel Name'
+    required: true
+  run_id:
+    description: 'Github Run ID'
+    required: true
+  github_token:
+    description: 'Github Token'
+    required: true
+  aws_oidc_role:
+    description: 'AWS Role'
+    required: true
+  aws_region:
+    description: 'AWS Region'
+    required: true
+  upload_path:
+    description: 'Upload to S3'
+    required: true
+  bucket:
+    description: 'Bucket to Upload into'
+    required: true
+    
+    
+runs:
+  using: "composite"
+  steps:
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws_oidc_role }}
+        aws-region: ${{ inputs.aws_region }}
+
+    - name: Upload Assets to S3
+      shell: bash
+      run: |
+        # Upload all files in the artifacts directory
+        aws s3 cp ${{inputs.upload_path}} s3://${{inputs.bucket}}/packages/${{inputs.project}}/${{inputs.release_number}}/
+    - name: Start DEV Deployment
+      uses: benc-uk/workflow-dispatch@v1
+      if: ${{ inputs.channel != 'Hotfix' }}
+      with:
+        workflow: deploy_dev_default.yaml
+        inputs: '{ "release_number": "${{inputs.release_number}}" }'
+    - name: Start PROD Deployment
+      uses: benc-uk/workflow-dispatch@v1
+      if: ${{ inputs.channel == 'Hotfix' }}
+      with:
+        workflow: deploy_prod_default.yaml
+        inputs: '{ "release_number": "${{inputs.release_number}}" }'
